@@ -176,36 +176,47 @@ task startSecureReader(type: JavaExec) {
 
 task startSecureBatchReader(type: JavaExec) {
     main = "io.pravega.example.secure.SecureBatchReader"
-    classpath = sourceSets.main.runtimeClasspath
-    if(System.getProperty("exec.args") != null) {
-        args System.getProperty("exec.args").split()
+    task scriptTransactionPerf(type: CreateStartScripts) {
+        outputDir = file('build/scripts')
+        mainClassName = 'io.pravega.example.transaction.TransactionPerf'
+        applicationName = 'transactionPerf'
+        defaultJvmOpts = ["-Dlogback.configurationFile=file:conf/logback.xml"]
+        classpath = files(jar.archivePath) + sourceSets.main.runtimeClasspath
     }
-}
 
+    task startTransactionPerf(type: JavaExec) {
+        main = "io.pravega.example.transaction.TransactionPerf"
+        classpath = sourceSets.main.runtimeClasspath
+        if (System.getProperty("exec.args") != null) {
+            args System.getProperty("exec.args").split()
+        }
+    }
 
-distributions {
-    main {
-        baseName = archivesBaseName
-        contents {
-            into('bin') {
-                from project.scriptHelloWorldWriter
-                from project.scriptHelloWorldReader
-                from project.scriptConsoleWriter
-                from project.scriptConsoleReader
-                from project.scriptSharedConfigCli
-                from project.scriptNoopReader
-                from project.scriptStreamCutsCli
-                from project.scriptSecureWriter
-                from project.scriptSecureReader
-                from project.scriptSecureBatchReader
-            }
-            into('lib') {
-                from(jar)
-                from(project.configurations.runtime)
-            }
-            into('conf') {
-                from(project.file('src/main/resources/logback.xml'))
-                from(project.file('src/main/resources/cert.pem'))
+    distributions {
+        main {
+            baseName = archivesBaseName
+            contents {
+                into('bin') {
+                    from project.scriptHelloWorldWriter
+                    from project.scriptHelloWorldReader
+                    from project.scriptConsoleWriter
+                    from project.scriptConsoleReader
+                    from project.scriptSharedConfigCli
+                    from project.scriptNoopReader
+                    from project.scriptStreamCutsCli
+                    from project.scriptSecureWriter
+                    from project.scriptSecureReader
+                    from project.scriptSecureBatchReader
+                    from project.scriptTransactionPerf
+                }
+                into('lib') {
+                    from(jar)
+                    from(project.configurations.runtime)
+                }
+                into('conf') {
+                    from(project.file('src/main/resources/logback.xml'))
+                    from(project.file('src/main/resources/cert.pem'))
+                }
             }
         }
     }
