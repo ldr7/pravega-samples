@@ -5,11 +5,13 @@ import io.pravega.client.EventStreamClientFactory;
 import io.pravega.client.admin.StreamManager;
 import io.pravega.client.stream.*;
 import io.pravega.client.stream.impl.JavaSerializer;
+import io.pravega.common.Timer;
 import org.apache.commons.cli.*;
 
 import java.net.URI;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 public class TransactionPerf {
     
@@ -30,35 +32,50 @@ public class TransactionPerf {
     
     private static void commitTransaction (String uriString, int numberOfSegments) throws TxnFailedException {
         final URI controllerURI = URI.create(uriString);
-
+        long writeTime = 0;
+        long commitTime = 0;
+        long beginCallTime = 0;
+        long origin = 0;
         StreamManager streamManager = StreamManager.create(controllerURI);
         streamManager.createScope(scope);
 
         StreamConfiguration streamConfig = StreamConfiguration.builder()
                 .scalingPolicy(ScalingPolicy.fixed(numberOfSegments))
                 .build();
-        
+        Timer timer = new Timer();
         String streamName = String.valueOf(numberOfSegments) + "segmentStream";
         streamManager.createStream(scope, streamName, streamConfig);
         EventStreamClientFactory clientFactory = EventStreamClientFactory.withScope(scope, ClientConfig.builder().controllerURI(controllerURI).build());
         TransactionalEventStreamWriter<String> writerTxn = clientFactory.createTransactionalEventWriter(streamName, new JavaSerializer<>(),
                 EventWriterConfig.builder().build());
         List<Transaction<?>> transactions = new LinkedList<>();
-        long start = System.nanoTime();
-        Transaction<String> transaction = writerTxn.beginTxn();
-        transactions.add(transaction);
-        long writeTimeInitial = System.nanoTime();
-        for (int i = 0; i < numberOfEvents; i++) {
-            String event = "\n Transactional Publish \n";
-            transaction.writeEvent(""+i, event);
+        long endTime = System.nanoTime() + TimeUnit.NANOSECONDS.convert(5L, TimeUnit.MINUTES);
+        while(System.nanoTime() < endTime) {
+            long beginTime = System.nanoTime();
+            Transaction<String> transaction = writerTxn.beginTxn();
+            if (beginCallTime == 0){
+                origin = System.nanoTime();   
+            }
+            beginCallTime += System.nanoTime() - beginTime;
+            transactions.add(transaction);
+            long writeTimeInitial = System.nanoTime();
+            for (int i = 0; i < numberOfEvents; i++) {
+                String event = "\n Transactional Publish \n";
+                transaction.writeEvent("" + i, event);
+            }
+            writeTime += System.nanoTime() - writeTimeInitial;
+            long commitTimeInitial = System.nanoTime();
+            transaction.commit();
+            commitTime += System.nanoTime() - commitTimeInitial;
+            while (transactions.stream().map(x -> x.checkStatus()).filter(
+                    txnStatus -> txnStatus != Transaction.Status.COMMITTED).findAny().isPresent()) ;
         }
-        long writeTime = (System.nanoTime() - writeTimeInitial)/1000000;
-        long commitTimeInitial  = System.nanoTime();
-        transaction.commit();
-        long commitTime = (System.nanoTime() - commitTimeInitial)/1000000;
-        while(transactions.stream().map(x -> x.checkStatus()).filter(txnStatus -> txnStatus != Transaction.Status.COMMITTED).findAny().isPresent());
-        System.out.println(writeTime);
-        System.out.println(commitTime);
+        long totalTime = System.nanoTime() - origin;
+        int noOfTransactions = transactions.size();
+        System.out.println("beginCallTime" + beginCallTime/noOfTransactions);
+        System.out.println("writeTime" + writeTime/noOfTransactions);
+        System.out.println("commitTime" + commitTime/noOfTransactions);
+        System.out.println("total time" + totalTime);
     }
 
     public static void main(String[] args) throws TxnFailedException {
