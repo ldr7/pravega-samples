@@ -166,6 +166,22 @@ task startSecureReader(type: JavaExec) {
     }
 }
 
+task scriptTransactionPerf(type: CreateStartScripts) {
+    outputDir = file('build/scripts')
+    mainClassName = 'io.pravega.example.transaction.TransactionPerf'
+    applicationName = 'transactionPerf'
+    defaultJvmOpts = ["-Dlogback.configurationFile=file:conf/logback.xml"]
+    classpath = files(jar.archivePath) + sourceSets.main.runtimeClasspath
+}
+
+task startTransactionPerf(type: JavaExec) {
+    main = "io.pravega.example.transaction.TransactionPerf"
+    classpath = sourceSets.main.runtimeClasspath
+    if(System.getProperty("exec.args") != null) {
+        args System.getProperty("exec.args").split()
+    }
+}
+
 distributions {
     main {
         baseName = archivesBaseName
@@ -180,6 +196,7 @@ distributions {
                 from project.scriptStreamCutsCli
                 from project.scriptSecureWriter
                 from project.scriptSecureReader
+                from project.scriptTransactionPerf
             }
             into('lib') {
                 from(jar)
