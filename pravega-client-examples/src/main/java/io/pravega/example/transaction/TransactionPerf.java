@@ -5,7 +5,6 @@ import io.pravega.client.EventStreamClientFactory;
 import io.pravega.client.admin.StreamManager;
 import io.pravega.client.stream.*;
 import io.pravega.client.stream.impl.JavaSerializer;
-import io.pravega.common.Timer;
 import org.apache.commons.cli.*;
 
 import java.net.URI;
@@ -42,7 +41,6 @@ public class TransactionPerf {
         StreamConfiguration streamConfig = StreamConfiguration.builder()
                 .scalingPolicy(ScalingPolicy.fixed(numberOfSegments))
                 .build();
-        Timer timer = new Timer();
         String streamName = String.valueOf(numberOfSegments) + "segmentStream";
         streamManager.createStream(scope, streamName, streamConfig);
         EventStreamClientFactory clientFactory = EventStreamClientFactory.withScope(scope, ClientConfig.builder().controllerURI(controllerURI).build());
@@ -72,10 +70,13 @@ public class TransactionPerf {
         }
         long totalTime = System.nanoTime() - origin;
         int noOfTransactions = transactions.size();
-        System.out.println("beginCallTime" + beginCallTime/noOfTransactions);
-        System.out.println("writeTime" + writeTime/noOfTransactions);
-        System.out.println("commitTime" + commitTime/noOfTransactions);
-        System.out.println("total time" + totalTime);
+        long waitTime = totalTime - (beginCallTime + writeTime + commitTime);
+        System.out.println("beginCallTime: " + beginCallTime/noOfTransactions);
+        System.out.println("writeTime: " + writeTime/noOfTransactions);
+        System.out.println("commitTime: " + commitTime/noOfTransactions);
+        System.out.println("Average wait time: " + waitTime/noOfTransactions);
+        System.out.println("total time: " + totalTime);
+        System.out.println("Number of Transactions: " + noOfTransactions);
     }
 
     public static void main(String[] args) throws TxnFailedException {
