@@ -11,6 +11,7 @@ import java.net.URI;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 public class TransactionPerf {
     
@@ -65,8 +66,10 @@ public class TransactionPerf {
             long commitTimeInitial = System.nanoTime();
             transaction.commit();
             commitTime += System.nanoTime() - commitTimeInitial;
-            while (transactions.stream().map(x -> x.checkStatus()).filter(
-                    txnStatus -> txnStatus != Transaction.Status.COMMITTED).findAny().isPresent()) ;
+        }
+        while (!transactions.isEmpty()) {
+            transactions = transactions.stream().filter(
+                    x -> x.checkStatus() != Transaction.Status.COMMITTED).collect(Collectors.toList());
         }
         long totalTime = System.nanoTime() - origin;
         int noOfTransactions = transactions.size();
