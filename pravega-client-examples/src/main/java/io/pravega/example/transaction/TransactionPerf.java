@@ -71,8 +71,8 @@ public class TransactionPerf {
             transactions = transactions.stream().filter(
                     x -> x.checkStatus() != Transaction.Status.COMMITTED).collect(Collectors.toList());
         }
-        long totalTime = System.nanoTime() - origin;
         int noOfTransactions = transactions.size();
+        long totalTime = System.nanoTime() - origin;
         long waitTime = totalTime - (beginCallTime + writeTime + commitTime);
         System.out.println("beginCallTime: " + beginCallTime/noOfTransactions);
         System.out.println("writeTime: " + writeTime/noOfTransactions);
