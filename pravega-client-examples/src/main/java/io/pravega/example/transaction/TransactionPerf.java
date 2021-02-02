@@ -8,7 +8,12 @@ import io.pravega.client.stream.impl.JavaSerializer;
 import lombok.Data;
 import org.apache.commons.cli.*;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.net.URI;
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -16,7 +21,8 @@ import java.util.stream.Collectors;
 public class TransactionPerf {
     private static final Random RANDOM = new Random();
     private static final String scope = "scope";
-
+    private static final String fileName = "TxnPerfRuns.txt";
+    
     private static Options getOptions() {
         final Options options = new Options();
         options.addOption("u", "uri", true, "Controller URI");
@@ -44,20 +50,16 @@ public class TransactionPerf {
     private static void commitTransaction(String uriString, List<Integer> values, int numberOfIterations,
                                           int numberOfEvents, int size, boolean singleRoutingKey,
                                           int timeInMinutes,
-                                          int delayInMinutes) throws TxnFailedException, InterruptedException {
-        TreeMap<Integer, Long> writeTimeMap = new TreeMap<Integer, Long>();
-        TreeMap<Integer, Long> commitTimeMap = new TreeMap<Integer, Long>();
-        TreeMap<Integer, Long> beginCallMap = new TreeMap<Integer, Long>();
-        TreeMap<Integer, Integer> noOfTransactionsMap = new TreeMap<Integer, Integer>();
-        TreeMap<Integer, Long> avgWaitTimeMap = new TreeMap<Integer, Long>();
+                                          int delayInMinutes) throws TxnFailedException, InterruptedException,
+                                                                     IOException {
         final URI controllerURI = URI.create(uriString);
         Map<Integer, Result> result = new HashMap<>();
         for (int numberOfSegments : values) {
-            writeTimeMap.clear();
-            commitTimeMap.clear();
-            beginCallMap.clear();
-            noOfTransactionsMap.clear();
-            avgWaitTimeMap.clear();
+            TreeMap<Integer, Long> writeTimeMap = new TreeMap<Integer, Long>();
+            TreeMap<Integer, Long> commitTimeMap = new TreeMap<Integer, Long>();
+            TreeMap<Integer, Long> beginCallMap = new TreeMap<Integer, Long>();
+            TreeMap<Integer, Integer> noOfTransactionsMap = new TreeMap<Integer, Integer>();
+            TreeMap<Integer, Long> avgWaitTimeMap = new TreeMap<Integer, Long>();
             for (int i = 0; i < numberOfIterations; i++) {
                 long writeTime = 0;
                 long commitTime = 0;
@@ -103,13 +105,18 @@ public class TransactionPerf {
                     }
                     long totalTime = System.nanoTime() - origin;
                     long waitTime = totalTime - (beginCallTime + writeTime + commitTime);
-                    System.out.println("beginCallTime: " + beginCallTime / noOfTransactions);
-                    System.out.println("writeTime: " + writeTime / noOfTransactions);
-                    System.out.println("commitTime: " + commitTime / noOfTransactions);
-                    System.out.println("Average wait time: " + waitTime / noOfTransactions);
-                    System.out.println("additional wait time: " + waitTime);
-                    System.out.println("total time: " + totalTime);
-                    System.out.println("Number of Transactions: " + noOfTransactions);
+                    try(FileWriter fw = new FileWriter(fileName, true);
+                        BufferedWriter bw = new BufferedWriter(fw);
+                        PrintWriter out = new PrintWriter(bw)) {
+                        out.println(
+                                "beginCallTime: " + Duration.ofNanos(beginCallTime / noOfTransactions).toMillis());
+                        out.println("writeTime: " + Duration.ofNanos(writeTime / noOfTransactions).toMillis());
+                        out.println("commitTime: " + Duration.ofNanos(commitTime / noOfTransactions).toMillis());
+                        out.println("Average wait time: " + Duration.ofNanos(waitTime / noOfTransactions).toMillis());
+                        out.println("additional wait time: " + Duration.ofNanos(waitTime).toMillis());
+                        out.println("total time: " + Duration.ofNanos(totalTime).toMillis());
+                        out.println("Number of Transactions: " + noOfTransactions);
+                    }
                     Result res = new Result(writeTime, commitTime, beginCallTime, noOfTransactions, waitTime);
                     int count = i;
                     result.compute(numberOfSegments, (x, y) -> {
@@ -137,29 +144,48 @@ public class TransactionPerf {
             ArrayList<Long> avgWaitTimeMapList = new ArrayList<>(avgWaitTimeMap.values());
             noOfTransactionsMap = (TreeMap<Integer, Integer>) valueSort(noOfTransactionsMap);
             ArrayList<Integer> noOfTransactionsValuesList = new ArrayList<Integer>(noOfTransactionsMap.values());
-            System.out.println("Percentile Printing");
-            System.out.println("Number of segments" + numberOfSegments);
-            System.out.println("75th percentile number of write time" + writeTimeMapValuesList.get((int)0.75*numberOfIterations));
-            System.out.println("75th percentile number of avg wait time" + avgWaitTimeMapList.get((int)0.75*numberOfIterations));
-            System.out.println("75th percentile number of begin call time" + beginCallMapValuesList.get((int)0.75*numberOfIterations));
-            System.out.println("75th percentile number of commit time" + commitTimeMapValuesList.get((int)0.75*numberOfIterations));
-            System.out.println("75th percentile number of transactions" + noOfTransactionsValuesList.get((int)0.75*numberOfIterations));
+            System.out.println("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxPercentile Printingxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
+            System.out.println("Number of segments: " + numberOfSegments);
+            System.out.println("Percentile 75th --------------");
+            System.out.println("75th percentile number of write time" + Duration.ofNanos(
+                    writeTimeMapValuesList.get((int) (0.75 * numberOfIterations))).toMillis());
+            System.out.println("75th percentile number of avg wait time" + Duration.ofNanos(
+                    avgWaitTimeMapList.get((int) (0.75 * numberOfIterations))).toMillis());
+            System.out.println("75th percentile number of begin call time" + Duration.ofNanos(
+                    beginCallMapValuesList.get((int) (0.75 * numberOfIterations))).toMillis());
+            System.out.println("75th percentile number of commit time" + Duration.ofNanos(
+                    commitTimeMapValuesList.get((int) (0.75 * numberOfIterations))).toMillis());
+            System.out.println("75th percentile number of transactions" + noOfTransactionsValuesList.get(
+                    (int) (0.75 * numberOfIterations)));
+            System.out.println("Percentile 90th ---------------");
+            System.out.println("90th percentile number of write time" + Duration.ofNanos(
+                    writeTimeMapValuesList.get((int) (0.90 * numberOfIterations))).toMillis());
+            System.out.println("90th percentile number of avg wait time" + Duration.ofNanos(
+                    avgWaitTimeMapList.get((int) (0.90 * numberOfIterations))).toMillis());
+            System.out.println("90th percentile number of begin call time" + Duration.ofNanos(
+                    beginCallMapValuesList.get((int) (0.90 * numberOfIterations))).toMillis());
+            System.out.println("90th percentile number of commit time" + Duration.ofNanos(
+                    commitTimeMapValuesList.get((int) (0.90 * numberOfIterations))).toMillis());
+            System.out.println("90th percentile number of transactions" + noOfTransactionsValuesList.get(
+                    (int) (0.90 * numberOfIterations)));
+            System.out.println("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
         }
 
         System.out.println("-------------------------------- final result ------------------------------");
         result.forEach((x, y) -> {
             System.out.println("number of segments = : " + x);
-            System.out.println("beginCallTime: " + y.beginCallTime);
-            System.out.println("writeTime: " + y.writeTime);
-            System.out.println("commitTime: " + y.commitTime);
-            System.out.println("Average wait time: " + y.additionalDelay / y.noOfTransactions);
-            System.out.println("additional wait time: " + y.additionalDelay);
+            System.out.println("beginCallTime: " + Duration.ofNanos(y.beginCallTime).toMillis());
+            System.out.println("writeTime: " + Duration.ofNanos(y.writeTime).toMillis());
+            System.out.println("commitTime: " + Duration.ofNanos(y.commitTime).toMillis());
+            System.out.println(
+                    "Average wait time: " + Duration.ofNanos(y.additionalDelay / y.noOfTransactions).toMillis());
+            System.out.println("additional wait time: " + Duration.ofNanos(y.additionalDelay).toMillis());
             System.out.println("Number of Transactions: " + y.noOfTransactions);
             System.out.println("--------------------------------------------------------------");
         });
     }
 
-    public static void main(String[] args) throws TxnFailedException, InterruptedException {
+    public static void main(String[] args) throws TxnFailedException, InterruptedException, IOException {
         Options options = getOptions();
         CommandLine cmd = null;
         try {
@@ -179,21 +205,18 @@ public class TransactionPerf {
         final int timeInMinutes = Integer.parseInt(cmd.getOptionValue("t", "5"));
         final boolean singleRoutingKey = cmd.hasOption("s");
         final int delayInMinutes = Integer.parseInt(cmd.getOptionValue("d", "5"));
-
+        createFile();
         commitTransaction(uriString, numberOfSegments, numberOfIterations, numberOfEvents, eventSize, singleRoutingKey,
                 timeInMinutes, delayInMinutes);
     }
 
-    public static <K, V extends Comparable<V> > Map<K, V>
-    valueSort(final Map<K, V> map)
-    {
+    public static <K, V extends Comparable<V>> Map<K, V>
+    valueSort(final Map<K, V> map) {
         // Static Method with return type Map and 
         // extending comparator class which compares values 
         // associated with two keys 
-        Comparator<K> valueComparator = new Comparator<K>()
-        {
-            public int compare(K k1, K k2)
-            {
+        Comparator<K> valueComparator = new Comparator<K>() {
+            public int compare(K k1, K k2) {
                 int comp = map.get(k1).compareTo(map.get(k2));
                 if (comp == 0)
                     return 1;
@@ -221,6 +244,16 @@ public class TransactionPerf {
             int noOfTransactionsAvg = (this.noOfTransactions * count + res.noOfTransactions) / count + 1;
             long additionalDelayAvg = (this.additionalDelay * count + res.additionalDelay) / count + 1;
             return new Result(writeAvg, commitTimeAvg, beginCallTimeAvg, noOfTransactionsAvg, additionalDelayAvg);
+        }
+    }
+    
+    private static void createFile() {
+        try {
+            FileWriter fw = new FileWriter(fileName);
+            fw.close();
+        } catch (IOException e) {
+            System.out.println("Eception in file creation");
+            e.printStackTrace();
         }
     }
 }
