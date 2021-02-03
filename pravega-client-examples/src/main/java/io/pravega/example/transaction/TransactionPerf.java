@@ -22,7 +22,7 @@ public class TransactionPerf {
     private static final Random RANDOM = new Random();
     private static final String scope = "scope";
     private static final String fileName = "TxnPerfRuns.txt";
-    
+
     private static Options getOptions() {
         final Options options = new Options();
         options.addOption("u", "uri", true, "Controller URI");
@@ -55,6 +55,11 @@ public class TransactionPerf {
         final URI controllerURI = URI.create(uriString);
         Map<Integer, Result> result = new HashMap<>();
         for (int numberOfSegments : values) {
+            try (FileWriter fw = new FileWriter(fileName, true);
+                 BufferedWriter bw = new BufferedWriter(fw);
+                 PrintWriter out = new PrintWriter(bw)) {
+                out.println("NUMBER OF SEGMENTS: " + numberOfSegments);
+            }
             TreeMap<Integer, Long> writeTimeMap = new TreeMap<Integer, Long>();
             TreeMap<Integer, Long> commitTimeMap = new TreeMap<Integer, Long>();
             TreeMap<Integer, Long> beginCallMap = new TreeMap<Integer, Long>();
@@ -105,9 +110,9 @@ public class TransactionPerf {
                     }
                     long totalTime = System.nanoTime() - origin;
                     long waitTime = totalTime - (beginCallTime + writeTime + commitTime);
-                    try(FileWriter fw = new FileWriter(fileName, true);
-                        BufferedWriter bw = new BufferedWriter(fw);
-                        PrintWriter out = new PrintWriter(bw)) {
+                    try (FileWriter fw = new FileWriter(fileName, true);
+                         BufferedWriter bw = new BufferedWriter(fw);
+                         PrintWriter out = new PrintWriter(bw)) {
                         out.println(
                                 "beginCallTime: " + Duration.ofNanos(beginCallTime / noOfTransactions).toMillis());
                         out.println("writeTime: " + Duration.ofNanos(writeTime / noOfTransactions).toMillis());
@@ -131,44 +136,10 @@ public class TransactionPerf {
                     commitTimeMap.put(i, commitTime / noOfTransactions);
                     avgWaitTimeMap.put(i, waitTime / noOfTransactions);
                     noOfTransactionsMap.put(i, noOfTransactions);
+                    runningPercentile(writeTimeMap, beginCallMap, commitTimeMap, avgWaitTimeMap, noOfTransactionsMap);
                     Thread.sleep(delayInMinutes == 0 ? 10 * 1000 : delayInMinutes * 60 * 1000);
                 }
             }
-            writeTimeMap = (TreeMap<Integer, Long>) valueSort(writeTimeMap);
-            ArrayList<Long> writeTimeMapValuesList = new ArrayList<>(writeTimeMap.values());
-            beginCallMap = (TreeMap<Integer, Long>) valueSort(beginCallMap);
-            ArrayList<Long> beginCallMapValuesList = new ArrayList<>(beginCallMap.values());
-            commitTimeMap = (TreeMap<Integer, Long>) valueSort(commitTimeMap);
-            ArrayList<Long> commitTimeMapValuesList = new ArrayList<>(commitTimeMap.values());
-            avgWaitTimeMap = (TreeMap<Integer, Long>) valueSort(avgWaitTimeMap);
-            ArrayList<Long> avgWaitTimeMapList = new ArrayList<>(avgWaitTimeMap.values());
-            noOfTransactionsMap = (TreeMap<Integer, Integer>) valueSort(noOfTransactionsMap);
-            ArrayList<Integer> noOfTransactionsValuesList = new ArrayList<Integer>(noOfTransactionsMap.values());
-            System.out.println("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxPercentile Printingxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
-            System.out.println("Number of segments: " + numberOfSegments);
-            System.out.println("Percentile 75th --------------");
-            System.out.println("75th percentile number of write time" + Duration.ofNanos(
-                    writeTimeMapValuesList.get((int) (0.75 * numberOfIterations))).toMillis());
-            System.out.println("75th percentile number of avg wait time" + Duration.ofNanos(
-                    avgWaitTimeMapList.get((int) (0.75 * numberOfIterations))).toMillis());
-            System.out.println("75th percentile number of begin call time" + Duration.ofNanos(
-                    beginCallMapValuesList.get((int) (0.75 * numberOfIterations))).toMillis());
-            System.out.println("75th percentile number of commit time" + Duration.ofNanos(
-                    commitTimeMapValuesList.get((int) (0.75 * numberOfIterations))).toMillis());
-            System.out.println("75th percentile number of transactions" + noOfTransactionsValuesList.get(
-                    (int) (0.75 * numberOfIterations)));
-            System.out.println("Percentile 90th ---------------");
-            System.out.println("90th percentile number of write time" + Duration.ofNanos(
-                    writeTimeMapValuesList.get((int) (0.90 * numberOfIterations))).toMillis());
-            System.out.println("90th percentile number of avg wait time" + Duration.ofNanos(
-                    avgWaitTimeMapList.get((int) (0.90 * numberOfIterations))).toMillis());
-            System.out.println("90th percentile number of begin call time" + Duration.ofNanos(
-                    beginCallMapValuesList.get((int) (0.90 * numberOfIterations))).toMillis());
-            System.out.println("90th percentile number of commit time" + Duration.ofNanos(
-                    commitTimeMapValuesList.get((int) (0.90 * numberOfIterations))).toMillis());
-            System.out.println("90th percentile number of transactions" + noOfTransactionsValuesList.get(
-                    (int) (0.90 * numberOfIterations)));
-            System.out.println("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
         }
 
         System.out.println("-------------------------------- final result ------------------------------");
@@ -246,14 +217,116 @@ public class TransactionPerf {
             return new Result(writeAvg, commitTimeAvg, beginCallTimeAvg, noOfTransactionsAvg, additionalDelayAvg);
         }
     }
-    
+
     private static void createFile() {
         try {
             FileWriter fw = new FileWriter(fileName);
             fw.close();
         } catch (IOException e) {
-            System.out.println("Eception in file creation");
+            System.out.println("Exception in file creation");
             e.printStackTrace();
+        }
+    }
+
+    private static void runningPercentile(TreeMap<Integer, Long> writeTimeMap, TreeMap<Integer, Long> beginCallMap,
+                                          TreeMap<Integer, Long> commitTimeMap, TreeMap<Integer, Long> avgWaitTimeMap,
+                                          TreeMap<Integer, Integer> noOfTransactionsMap) throws IOException {
+        int numberOfIterations = noOfTransactionsMap.size();
+        writeTimeMap = (TreeMap<Integer, Long>) valueSort(writeTimeMap);
+        ArrayList<Long> writeTimeMapValuesList = new ArrayList<>(writeTimeMap.values());
+        beginCallMap = (TreeMap<Integer, Long>) valueSort(beginCallMap);
+        ArrayList<Long> beginCallMapValuesList = new ArrayList<>(beginCallMap.values());
+        commitTimeMap = (TreeMap<Integer, Long>) valueSort(commitTimeMap);
+        ArrayList<Long> commitTimeMapValuesList = new ArrayList<>(commitTimeMap.values());
+        avgWaitTimeMap = (TreeMap<Integer, Long>) valueSort(avgWaitTimeMap);
+        ArrayList<Long> avgWaitTimeMapList = new ArrayList<>(avgWaitTimeMap.values());
+        noOfTransactionsMap = (TreeMap<Integer, Integer>) valueSort(noOfTransactionsMap);
+        ArrayList<Integer> noOfTransactionsValuesList = new ArrayList<Integer>(noOfTransactionsMap.values());
+        try (FileWriter fw = new FileWriter(fileName, true);
+             BufferedWriter bw = new BufferedWriter(fw);
+             PrintWriter out = new PrintWriter(bw)) {
+            out.println("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxPercentile Printingxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
+            out.println("Percentile 50th --------------");
+            if (numberOfIterations % 2 == 0) {
+                out.println("50th percentile number of write time" + Duration.ofNanos(
+                        (writeTimeMapValuesList.get((int) (0.50 * numberOfIterations)) + writeTimeMapValuesList.get(
+                                ((int) (0.50 * numberOfIterations)) - 1))/2).toMillis());
+                out.println("50th percentile number of avg wait time" + Duration.ofNanos(
+                        (avgWaitTimeMapList.get((int) (0.50 * numberOfIterations)) + avgWaitTimeMapList.get(
+                                ((int) (0.50 * numberOfIterations)) - 1))/2).toMillis());
+                out.println("50th percentile number of begin call time" + Duration.ofNanos(
+                        (beginCallMapValuesList.get((int) (0.50 * numberOfIterations)) + beginCallMapValuesList.get(
+                                ((int) (0.50 * numberOfIterations)) - 1))/2).toMillis());
+                out.println("50th percentile number of commit time" + Duration.ofNanos(
+                        (commitTimeMapValuesList.get((int) (0.50 * numberOfIterations)) + commitTimeMapValuesList.get(
+                                ((int) (0.50 * numberOfIterations)) - 1))/2).toMillis());
+                out.println("50th percentile number of transactions" + noOfTransactionsValuesList.get(
+                        (int) (0.50 * numberOfIterations)) + noOfTransactionsValuesList.get(((int) (0.50*numberOfIterations)) -1));
+                out.println("Percentile 75th --------------");
+                out.println("75th percentile number of write time" + Duration.ofNanos(
+                        (writeTimeMapValuesList.get((int) (0.75 * numberOfIterations)) + writeTimeMapValuesList.get(
+                                ((int) (0.75 * numberOfIterations)) - 1))/2).toMillis());
+                out.println("75th percentile number of avg wait time" + Duration.ofNanos(
+                        (avgWaitTimeMapList.get((int) (0.75 * numberOfIterations)) + avgWaitTimeMapList.get(
+                                ((int) (0.75 * numberOfIterations)) - 1))/2).toMillis());
+                out.println("75th percentile number of begin call time" + Duration.ofNanos(
+                        (beginCallMapValuesList.get((int) (0.75 * numberOfIterations)) + beginCallMapValuesList.get(
+                                ((int) (0.75 * numberOfIterations)) - 1))/2).toMillis());
+                out.println("75th percentile number of commit time" + Duration.ofNanos(
+                        (commitTimeMapValuesList.get((int) (0.75 * numberOfIterations)) + commitTimeMapValuesList.get(
+                                ((int) (0.75 * numberOfIterations)) - 1))/2).toMillis());
+                out.println("75th percentile number of transactions" + (noOfTransactionsValuesList.get(
+                        (int) (0.75 * numberOfIterations)) + noOfTransactionsValuesList.get(((int) (0.75* numberOfIterations)) -1 ))/2);
+                out.println("Percentile 90th ---------------");
+                out.println("90th percentile number of write time" + Duration.ofNanos(
+                        (writeTimeMapValuesList.get((int) (0.90 * numberOfIterations)) + writeTimeMapValuesList.get(
+                                ((int) (0.90 * numberOfIterations)) - 1))/2).toMillis());
+                out.println("90th percentile number of avg wait time" + Duration.ofNanos(
+                        (avgWaitTimeMapList.get((int) (0.90 * numberOfIterations)) + avgWaitTimeMapList.get(
+                                ((int) (0.90 * numberOfIterations)) - 1))/2).toMillis());
+                out.println("90th percentile number of begin call time" + Duration.ofNanos(
+                        (beginCallMapValuesList.get((int) (0.90 * numberOfIterations)) + beginCallMapValuesList.get(
+                                ((int) (0.90 * numberOfIterations)) - 1))/2).toMillis());
+                out.println("90th percentile number of commit time" + Duration.ofNanos(
+                        (commitTimeMapValuesList.get((int) (0.90 * numberOfIterations)) + commitTimeMapValuesList.get(
+                                ((int) (0.90 * numberOfIterations)) - 1))/2).toMillis());
+                out.println("90th percentile number of transactions" + (noOfTransactionsValuesList.get(
+                        (int) (0.90 * numberOfIterations)) + noOfTransactionsValuesList.get(((int) (0.90*numberOfIterations)) - 1))/2);
+            } else {
+                out.println("50th percentile number of write time" + Duration.ofNanos(
+                        writeTimeMapValuesList.get((int) (0.50 * numberOfIterations))).toMillis());
+                out.println("50th percentile number of avg wait time" + Duration.ofNanos(
+                        avgWaitTimeMapList.get((int) (0.50 * numberOfIterations))).toMillis());
+                out.println("50th percentile number of begin call time" + Duration.ofNanos(
+                        beginCallMapValuesList.get((int) (0.50 * numberOfIterations))).toMillis());
+                out.println("50th percentile number of commit time" + Duration.ofNanos(
+                        commitTimeMapValuesList.get((int) (0.50 * numberOfIterations))).toMillis());
+                out.println("50th percentile number of transactions" + noOfTransactionsValuesList.get(
+                        (int) (0.50 * numberOfIterations)));
+                out.println("Percentile 75th --------------");
+                out.println("75th percentile number of write time" + Duration.ofNanos(
+                        writeTimeMapValuesList.get((int) (0.75 * numberOfIterations))).toMillis());
+                out.println("75th percentile number of avg wait time" + Duration.ofNanos(
+                        avgWaitTimeMapList.get((int) (0.75 * numberOfIterations))).toMillis());
+                out.println("75th percentile number of begin call time" + Duration.ofNanos(
+                        beginCallMapValuesList.get((int) (0.75 * numberOfIterations))).toMillis());
+                out.println("75th percentile number of commit time" + Duration.ofNanos(
+                        commitTimeMapValuesList.get((int) (0.75 * numberOfIterations))).toMillis());
+                out.println("75th percentile number of transactions" + noOfTransactionsValuesList.get(
+                        (int) (0.75 * numberOfIterations)));
+                out.println("Percentile 90th ---------------");
+                out.println("90th percentile number of write time" + Duration.ofNanos(
+                        writeTimeMapValuesList.get((int) (0.90 * numberOfIterations))).toMillis());
+                out.println("90th percentile number of avg wait time" + Duration.ofNanos(
+                        avgWaitTimeMapList.get((int) (0.90 * numberOfIterations))).toMillis());
+                out.println("90th percentile number of begin call time" + Duration.ofNanos(
+                        beginCallMapValuesList.get((int) (0.90 * numberOfIterations))).toMillis());
+                out.println("90th percentile number of commit time" + Duration.ofNanos(
+                        commitTimeMapValuesList.get((int) (0.90 * numberOfIterations))).toMillis());
+                out.println("90th percentile number of transactions" + noOfTransactionsValuesList.get(
+                        (int) (0.90 * numberOfIterations)));
+            }
+            out.println("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
         }
     }
 }
