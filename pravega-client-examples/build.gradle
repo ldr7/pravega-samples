@@ -206,8 +206,8 @@ task startSecureBatchReader(type: JavaExec) {
                     from project.scriptStreamCutsCli
                     from project.scriptSecureWriter
                     from project.scriptSecureReader
-                    from project.scriptSecureBatchReader
                     from project.scriptTransactionPerf
+                    from project.scriptScopeCreation
                 }
                 into('lib') {
                     from(jar)
@@ -220,4 +220,4 @@ task startSecureBatchReader(type: JavaExec) {
             }
         }
     }
-}
+    }
