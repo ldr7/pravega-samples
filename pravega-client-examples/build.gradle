@@ -183,7 +183,8 @@ task startSecureBatchReader(type: JavaExec) {
         defaultJvmOpts = ["-Dlogback.configurationFile=file:conf/logback.xml"]
         classpath = files(jar.archivePath) + sourceSets.main.runtimeClasspath
     }
-    
+}
+
     task startTransactionPerf(type: JavaExec) {
         main = "io.pravega.example.transaction.TransactionPerf"
         classpath = sourceSets.main.runtimeClasspath
@@ -192,21 +193,37 @@ task startSecureBatchReader(type: JavaExec) {
         }
     }
 
-task scriptScopeCreation(type: CreateStartScripts) {
-    outputDir = file('build/scripts')
-    mainClassName = 'io.pravega.example.debuggability.ScopeCreation'
-    applicationName = 'scopeCreation'
-    defaultJvmOpts = ["-Dlogback.configurationFile=file:conf/logback.xml"]
-    classpath = files(jar.archivePath) + sourceSets.main.runtimeClasspath
-}
-
-task startScopeCreation(type: JavaExec) {
-    main = "io.pravega.example.debuggability.ScopeCreation"
-    classpath = sourceSets.main.runtimeClasspath
-    if (System.getProperty("exec.args") != null) {
-        args System.getProperty("exec.args").split()
+    task scriptScopeCreation(type: CreateStartScripts) {
+        outputDir = file('build/scripts')
+        mainClassName = 'io.pravega.example.debuggability.ScopeCreation'
+        applicationName = 'scopeCreation'
+        defaultJvmOpts = ["-Dlogback.configurationFile=file:conf/logback.xml"]
+        classpath = files(jar.archivePath) + sourceSets.main.runtimeClasspath
     }
-}
+
+    task startScopeCreation(type: JavaExec) {
+        main = "io.pravega.example.debuggability.ScopeCreation"
+        classpath = sourceSets.main.runtimeClasspath
+        if (System.getProperty("exec.args") != null) {
+            args System.getProperty("exec.args").split()
+        }
+    }
+
+    task scriptStreamOperations(type: CreateStartScripts) {
+        outputDir = file('build/scripts')
+        mainClassName = 'io.pravega.example.debuggability.StreamOperations'
+        applicationName = 'streamOperations'
+        defaultJvmOpts = ["-Dlogback.configurationFile=file:conf/logback.xml"]
+        classpath = files(jar.archivePath) + sourceSets.main.runtimeClasspath
+    }
+
+    task startStreamOperations(type: JavaExec) {
+        main = "io.pravega.example.debuggability.StreamOperations"
+        classpath = sourceSets.main.runtimeClasspath
+        if (System.getProperty("exec.args") != null) {
+            args System.getProperty("exec.args").split()
+        }
+    }
 
     distributions {
         main {
@@ -224,6 +241,7 @@ task startScopeCreation(type: JavaExec) {
                     from project.scriptSecureReader
                     from project.scriptTransactionPerf
                     from project.scriptScopeCreation
+                    from project.scriptStreamOperations
                 }
                 into('lib') {
                     from(jar)
@@ -235,5 +253,4 @@ task startScopeCreation(type: JavaExec) {
                 }
             }
         }
-    }
     }
