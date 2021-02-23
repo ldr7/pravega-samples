@@ -17,7 +17,8 @@ public class StreamOperations {
         if(scopeName != null)
             defaultScopeName = scopeName;
         StreamManager streamManager = StreamManager.create(URI.create(uri));
-        streamManager.createScope(defaultScopeName);
+        if(!streamManager.checkScopeExists(defaultScopeName))
+            streamManager.createScope(defaultScopeName);
         StreamConfiguration streamConfiguration = StreamConfiguration.builder().scalingPolicy(ScalingPolicy.fixed(1)).build();
         boolean success = streamManager.createStream(defaultScopeName, streamName, streamConfiguration);
         System.out.println(success);
