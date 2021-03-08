@@ -6,6 +6,7 @@ import io.pravega.client.admin.ReaderGroupManager;
 import io.pravega.client.admin.StreamManager;
 import io.pravega.client.stream.*;
 import io.pravega.client.stream.impl.JavaSerializer;
+import io.pravega.client.stream.impl.UTF8StringSerializer;
 import io.pravega.common.concurrent.Futures;
 import lombok.Cleanup;
 import org.apache.commons.cli.*;
@@ -57,7 +58,7 @@ public class StreamOperations {
         System.out.println(success);
     }
 
-    private void truncateStream(String scopeName) throws ExecutionException, InterruptedException {
+    private void truncateStream(String scopeName) {
         if (scopeName != null)
             defaultScopeName = scopeName;
         StreamManager streamManager = StreamManager.create(URI.create(uri));
@@ -73,13 +74,13 @@ public class StreamOperations {
                 .stream(Stream.of(defaultScopeName, streamName))
                 .disableAutomaticCheckpoints()
                 .build();
-        String readerGroup1 = "readerGroup" + System.currentTimeMillis();
-        readerGroupManager.createReaderGroup(readerGroup1, readerGroupConfig);
-        ReaderGroup readerGroup = readerGroupManager.getReaderGroup(readerGroup1);
+        String readerGroupName = "readerGroup" + System.currentTimeMillis();
+        readerGroupManager.createReaderGroup(readerGroupName, readerGroupConfig);
+        ReaderGroup readerGroup = readerGroupManager.getReaderGroup(readerGroupName);
         EventStreamClientFactory clientFactory = EventStreamClientFactory.withScope(defaultScopeName,
                 ClientConfig.builder().controllerURI(URI.create(uri)).build());
         EventStreamReader<String> reader = clientFactory.createReader("reader",
-                readerGroup1,
+                readerGroupName,
                 new JavaSerializer<>(),
                 ReaderConfig.builder().build());
         EventRead<String> event = reader.readNextEvent(10000);
@@ -99,6 +100,55 @@ public class StreamOperations {
         System.out.println("number of elements in streamCut map: " + readerGroup.getStreamCuts().size());
         System.out.println(readerGroup.getStreamCuts().get(Stream.of(defaultScopeName, streamName)));
     }
+    
+    private void aliterTruncateStream(String scopeName) {
+        //scope and stream creation
+        if (scopeName != null)
+            defaultScopeName = scopeName;
+        StreamManager streamManager = StreamManager.create(URI.create(uri));
+        if (!streamManager.checkScopeExists(defaultScopeName))
+            streamManager.createScope(defaultScopeName);
+        StreamConfiguration streamConfiguration = StreamConfiguration.builder().scalingPolicy(
+                ScalingPolicy.fixed(1)).build();
+        streamManager.createStream(defaultScopeName, streamName, streamConfiguration);
+        //populate
+        populateStream(defaultScopeName);
+        // setting up the reader
+        ReaderGroupManager readerGroupManager = ReaderGroupManager.withScope(defaultScopeName, URI.create(uri));
+        ReaderGroupConfig readerGroupConfig = ReaderGroupConfig.builder()
+                .stream(defaultScopeName + "/" + streamName)
+                .disableAutomaticCheckpoints()
+                .build();
+        String readerGroupName = "readerGroup" + System.currentTimeMillis();
+        readerGroupManager.createReaderGroup(readerGroupName, readerGroupConfig);
+        ReaderGroup readerGroup = readerGroupManager.getReaderGroup(readerGroupName);
+        EventStreamClientFactory clientFactory = EventStreamClientFactory.withScope(defaultScopeName,
+                ClientConfig.builder().controllerURI(URI.create(uri)).build());
+        @Cleanup
+        EventStreamReader<String> reader = clientFactory.createReader("reader",
+                readerGroupName,
+                new UTF8StringSerializer(),
+                ReaderConfig.builder().build());
+        System.out.println(reader.readNextEvent(5000).getEvent());
+        reader.close();
+        // Create a Checkpoint, get StreamCut and truncate the Stream at that point.
+        Checkpoint cp = readerGroup.initiateCheckpoint("myCheckpoint", executor).join();
+        StreamCut streamCut = cp.asImpl().getPositions().values().iterator().next();
+        boolean success = streamManager.truncateStream(defaultScopeName, streamName, streamCut);
+        System.out.println("Truncation output = " + success);
+        // create a new reader group
+        final String newReaderGroupName = readerGroupName + "new" + System.currentTimeMillis();
+        readerGroupManager.createReaderGroup(newReaderGroupName, ReaderGroupConfig.builder().stream(Stream.of(defaultScopeName, streamName)).build());
+        @Cleanup
+        final EventStreamReader<String> newReader = clientFactory.createReader(newReaderGroupName + "2",
+                newReaderGroupName, new UTF8StringSerializer(), ReaderConfig.builder().build());
+        System.out.println("event after truncate");
+        System.out.println(newReader.readNextEvent(5000).getEvent());
+        readerGroupManager.close(); // if not closed an EOF is observed when the below readStream method runs.
+        System.out.println("stream read after truncate");
+        readStream(defaultScopeName);
+        
+    }
 
     private void readStream(String scopeName) {
         System.out.println("read stream method");
@@ -113,7 +163,7 @@ public class StreamOperations {
                     ClientConfig.builder().controllerURI(URI.create(uri)).build());
                  EventStreamReader<String> reader = clientFactory.createReader("reader1",
                          readerGroupName,
-                         new JavaSerializer<>(),
+                         new UTF8StringSerializer(),
                          ReaderConfig.builder().build())) {
                 EventRead<String> event = reader.readNextEvent(1000);
                 String eventString = event.getEvent();
@@ -130,7 +180,7 @@ public class StreamOperations {
         try (EventStreamClientFactory clientFactory = EventStreamClientFactory.withScope(scopeName,
                 ClientConfig.builder().controllerURI(URI.create(uri)).build());
              EventStreamWriter<String> writer = clientFactory.createEventWriter(streamName,
-                     new JavaSerializer<>(), EventWriterConfig.builder().build())) {
+                     new UTF8StringSerializer(), EventWriterConfig.builder().build())) {
             for (int i = 0; i < 10; i++) {
                 writer.writeEvent(String.valueOf(i)).join();
             }
@@ -186,8 +236,12 @@ public class StreamOperations {
             case "truncate":
                 streamOperations.truncateStream(scope);
                 break;
+            case "aliterTruncate":
+                streamOperations.aliterTruncateStream(scope);
+                break;
             default:
                 System.err.println("Wrong input");
         }
+        return;
     }
 }
