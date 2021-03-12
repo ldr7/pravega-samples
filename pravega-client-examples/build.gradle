@@ -225,6 +225,22 @@ task startSecureBatchReader(type: JavaExec) {
         }
     }
 
+task scriptTransactionOperations(type: CreateStartScripts) {
+    outputDir = file('build/scripts')
+    mainClassName = 'io.pravega.example.debuggability.TransactionOperations'
+    applicationName = 'streamOperations'
+    defaultJvmOpts = ["-Dlogback.configurationFile=file:conf/logback.xml"]
+    classpath = files(jar.archivePath) + sourceSets.main.runtimeClasspath
+}
+
+task startTransactionOperations(type: JavaExec) {
+    main = "io.pravega.example.debuggability.TransactionOperations"
+    classpath = sourceSets.main.runtimeClasspath
+    if (System.getProperty("exec.args") != null) {
+        args System.getProperty("exec.args").split()
+    }
+}
+
     distributions {
         main {
             baseName = archivesBaseName
@@ -242,6 +258,7 @@ task startSecureBatchReader(type: JavaExec) {
                     from project.scriptTransactionPerf
                     from project.scriptScopeCreation
                     from project.scriptStreamOperations
+                    from project.scriptTransactionOperations
                 }
                 into('lib') {
                     from(jar)

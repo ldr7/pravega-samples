@@ -138,15 +138,15 @@ public class StreamOperations {
         System.out.println("Truncation output = " + success);
         // create a new reader group
         final String newReaderGroupName = readerGroupName + "new" + System.currentTimeMillis();
-        readerGroupManager.createReaderGroup(newReaderGroupName, ReaderGroupConfig.builder().stream(Stream.of(defaultScopeName, streamName)).build());
-        @Cleanup
-        final EventStreamReader<String> newReader = clientFactory.createReader(newReaderGroupName + "2",
-                newReaderGroupName, new UTF8StringSerializer(), ReaderConfig.builder().build());
-        System.out.println("event after truncate");
-        System.out.println(newReader.readNextEvent(5000).getEvent());
-        readerGroupManager.close(); // if not closed an EOF is observed when the below readStream method runs.
-        System.out.println("stream read after truncate");
-        readStream(defaultScopeName);
+        //readerGroupManager.createReaderGroup(newReaderGroupName, ReaderGroupConfig.builder().stream(Stream.of(defaultScopeName, streamName)).build());
+        //@Cleanup
+        //final EventStreamReader<String> newReader = clientFactory.createReader(newReaderGroupName + "2",
+                //newReaderGroupName, new UTF8StringSerializer(), ReaderConfig.builder().build());
+        //System.out.println("event after truncate");
+        //System.out.println(newReader.readNextEvent(5000).getEvent());
+        readerGroupManager.close(); // if not closed an EOF exception is thrown when the below readStream method runs.
+        //System.out.println("stream read after truncate");
+        //readStream(defaultScopeName);
         
     }
 
