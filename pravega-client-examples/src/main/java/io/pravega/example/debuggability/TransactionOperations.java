@@ -3,22 +3,22 @@ package io.pravega.example.debuggability;
 import io.pravega.client.ClientConfig;
 import io.pravega.client.EventStreamClientFactory;
 import io.pravega.client.admin.StreamManager;
-import io.pravega.client.stream.EventWriterConfig;
-import io.pravega.client.stream.ScalingPolicy;
-import io.pravega.client.stream.StreamConfiguration;
-import io.pravega.client.stream.TransactionalEventStreamWriter;
+import io.pravega.client.stream.*;
 import io.pravega.client.stream.impl.JavaSerializer;
 import org.apache.commons.cli.*;
 
 import java.net.URI;
+import java.util.Base64;
+import java.util.Random;
 
 public class TransactionOperations {
-    
+
     private String controllerURI;
     private String defaultScopeName = "scopeName";
     private String defaultStreamName = "streamName";
     int numberOfSegments;
-    
+    private static final Random RANDOM = new Random();
+
     private static Options getOptions() {
         final Options options = new Options();
         options.addOption("u", "uri", true, "Controller URI");
@@ -32,11 +32,10 @@ public class TransactionOperations {
         CommandLineParser parser = new DefaultParser();
         return parser.parse(options, args);
     }
-    
-    public static void main(String[] args) {
+
+    public static void main(String[] args) throws TxnFailedException {
         String streamName = null;
         String scopeName = null;
-        int noOfSegments;
         Options options = getOptions();
         CommandLine cmd = null;
         try {
@@ -47,34 +46,36 @@ public class TransactionOperations {
             formatter.printHelp("ConsoleWriter", options);
             System.exit(1);
         }
-        if(cmd.hasOption("s"))
+        if (cmd.hasOption("s"))
             streamName = cmd.getOptionValue("s");
-        if(cmd.hasOption("scope"))
+        if (cmd.hasOption("scope"))
             scopeName = cmd.getOptionValue("scope");
         String uri = cmd.getOptionValue("u");
         TransactionOperations transactionOperations = new TransactionOperations(uri);
         String operation = cmd.getOptionValue("o");
-        switch (operation){
+        switch (operation) {
             case "fixed":
                 transactionOperations.numberOfSegments = 1;
-                transactionOperations.createFixedSegmentsTxn(scopeName, streamName);
+                Transaction<String> transaction = transactionOperations.createFixedSegmentsTxn(scopeName, streamName);
+                transactionOperations.writeEvents(transaction, 1, 8);
+                transactionOperations.commitEvents(transaction);
                 break;
             default:
                 throw new IllegalStateException("Unexpected value: " + operation);
         }
         return;
-        
+
     }
-    
+
     public TransactionOperations(String uri) {
         this.controllerURI = uri;
     }
-    
-    private void createFixedSegmentsTxn(String scopeName, String streamName) {
+
+    private Transaction<String> createFixedSegmentsTxn(String scopeName, String streamName) {
         StreamManager streamManager = StreamManager.create(URI.create(controllerURI));
-        if(scopeName == null)
+        if (scopeName == null)
             scopeName = defaultScopeName;
-        if(streamName == null)
+        if (streamName == null)
             streamName = defaultStreamName;
         streamManager.createScope(scopeName);
         StreamConfiguration streamConfig = StreamConfiguration.builder()
@@ -86,6 +87,25 @@ public class TransactionOperations {
         TransactionalEventStreamWriter<String> writerTxn = clientFactory.createTransactionalEventWriter(
                 streamName, new JavaSerializer<>(),
                 EventWriterConfig.builder().build());
-        writerTxn.beginTxn();
+        Transaction<String> transaction = writerTxn.beginTxn();
+        return transaction;
+    }
+
+    private static String generateBigString(int size) {
+        byte[] array = new byte[size];
+        RANDOM.nextBytes(array);
+        return Base64.getEncoder().encodeToString(array);
+    }
+
+    private Transaction<String> writeEvents(Transaction<String> transaction, int numberOfEvents,
+                                            int eventSize) throws TxnFailedException {
+        for (int i = 0; i < numberOfEvents; i++) {
+            transaction.writeEvent(generateBigString(eventSize));
+        }
+        return transaction;
+    }
+
+    private void commitEvents(Transaction<String> transaction) throws TxnFailedException {
+        transaction.commit();
     }
 }

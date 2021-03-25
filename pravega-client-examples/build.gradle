@@ -228,13 +228,29 @@ task startSecureBatchReader(type: JavaExec) {
 task scriptTransactionOperations(type: CreateStartScripts) {
     outputDir = file('build/scripts')
     mainClassName = 'io.pravega.example.debuggability.TransactionOperations'
-    applicationName = 'streamOperations'
+    applicationName = 'transactionOperations'
     defaultJvmOpts = ["-Dlogback.configurationFile=file:conf/logback.xml"]
     classpath = files(jar.archivePath) + sourceSets.main.runtimeClasspath
 }
 
 task startTransactionOperations(type: JavaExec) {
     main = "io.pravega.example.debuggability.TransactionOperations"
+    classpath = sourceSets.main.runtimeClasspath
+    if (System.getProperty("exec.args") != null) {
+        args System.getProperty("exec.args").split()
+    }
+}
+
+task scriptWriteOperation(type: CreateStartScripts) {
+    outputDir = file('build/scripts')
+    mainClassName = 'io.pravega.example.debuggability.WriteOperation'
+    applicationName = 'writeOperation'
+    defaultJvmOpts = ["-Dlogback.configurationFile=file:conf/logback.xml"]
+    classpath = files(jar.archivePath) + sourceSets.main.runtimeClasspath
+}
+
+task startWriteOperation(type: JavaExec) {
+    main = "io.pravega.example.debuggability.WriteOperation"
     classpath = sourceSets.main.runtimeClasspath
     if (System.getProperty("exec.args") != null) {
         args System.getProperty("exec.args").split()
@@ -259,6 +275,7 @@ task startTransactionOperations(type: JavaExec) {
                     from project.scriptScopeCreation
                     from project.scriptStreamOperations
                     from project.scriptTransactionOperations
+                    from project.scriptWriteOperation
                 }
                 into('lib') {
                     from(jar)
